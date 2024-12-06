@@ -109,23 +109,43 @@ fn p2(text: Str) !usize {
 
     var cnt: usize = 0;
 
-    var iter = map.iterator();
-    while (iter.next()) |e| {
-        if (e.value_ptr.* == Tile.Wall) continue;
-        if (e.key_ptr[0] == p_init[0] and e.key_ptr[1] == p_init[1]) continue;
+    var p1_past = AutoHashMap(Point, void).init(gpa);
+    defer p1_past.deinit();
+    {
+        var p = p_init;
+        var d = Dir.N;
 
-        var tmp_map = try map.clone();
-        defer tmp_map.deinit();
+        while (map.contains(p)) {
+            const v = d.asVec();
+            const next = add(v, p);
+            try p1_past.put(p, {});
 
-        var past = AutoHashMap(State, void).init(gpa);
-        defer past.deinit();
+            if (map.get(next)) |t| {
+                if (t == Tile.Wall) {
+                    d = d.turnRight();
+                    continue;
+                }
+            }
+            p = next;
+        }
+    }
 
-        try tmp_map.put(e.key_ptr.*, Tile.Wall);
+    var past = AutoHashMap(State, void).init(gpa);
+    defer past.deinit();
+    var kiter = p1_past.keyIterator();
+    while (kiter.next()) |e| {
+        const c = map.getPtr(e.*) orelse unreachable;
+        if (e[0] == p_init[0] and e[1] == p_init[1]) continue;
+
+        past.clearRetainingCapacity();
+
+        c.* = Tile.Wall;
+        defer c.* = Tile.Open;
 
         var p = p_init;
         var d = Dir.N;
 
-        while (tmp_map.contains(p)) {
+        while (map.contains(p)) {
             const v = d.asVec();
             const next = add(v, p);
 
@@ -135,7 +155,7 @@ fn p2(text: Str) !usize {
             }
             try past.put(.{ .d = d, .p = p }, {});
 
-            if (tmp_map.get(next)) |t| {
+            if (map.get(next)) |t| {
                 if (t == Tile.Wall) {
                     d = d.turnRight();
                     continue;
