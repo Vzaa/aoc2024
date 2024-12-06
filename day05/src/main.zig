@@ -116,16 +116,13 @@ fn p2(text: Str) !u32 {
             for (rules.items) |rule| {
                 const a = rule.a;
                 const b = rule.b;
-
-                if (update.get(a)) |a_idx| {
-                    if (update.get(b)) |b_idx| {
-                        if (a_idx > b_idx) {
-                            try update.put(b, a_idx);
-                            try update.put(a, b_idx);
-                            fixed = true;
-                            continue :outer;
-                        }
-                    }
+                const a_idx = update.get(a) orelse continue;
+                const b_idx = update.get(b) orelse continue;
+                if (a_idx > b_idx) {
+                    try update.put(b, a_idx);
+                    try update.put(a, b_idx);
+                    fixed = true;
+                    continue :outer;
                 }
             }
             break;
