@@ -108,59 +108,30 @@ fn ucs(map: *Map, start: Point, end: Point) !usize {
 
     try frontier.add(PC{ .p = start, .c = 0, .d = Dir.E });
 
-    while (frontier.removeOrNull()) |cur| {
-        const pd = PD{ .p = cur.p, .d = cur.d };
-        try visited.put(pd, cur.c);
-
+    while (frontier.removeOrNull()) |*cur| {
         if (cur.p[0] == end[0] and cur.p[1] == end[1]) {
             return cur.c;
         }
 
-        {
-            const v = cur.d.asVec();
-            const np = add(cur.p, v);
-            if (!map.contains(np)) {
-                const npd = PD{ .p = np, .d = cur.d };
-                const cost = cur.c + 1;
+        const list: [3]PC = .{
+            PC{ .p = add(cur.p, cur.d.asVec()), .d = cur.d, .c = cur.c + 1 },
+            PC{ .p = cur.p, .d = cur.d.turnLeft(), .c = cur.c + 1000 },
+            PC{ .p = cur.p, .d = cur.d.turnRight(), .c = cur.c + 1000 },
+        };
+
+        for (list) |l| {
+            if (!map.contains(l.p)) {
+                const npd = PD{ .p = l.p, .d = l.d };
+                var push = true;
                 if (visited.get(npd)) |old_c| {
-                    if (old_c > cost) {
-                        try frontier.add(PC{ .p = np, .c = cost, .d = cur.d });
-                        try visited.put(npd, cost);
+                    if (old_c <= l.c) {
+                        push = false;
                     }
-                } else {
-                    try frontier.add(PC{ .p = np, .c = cost, .d = cur.d });
-                    try visited.put(npd, cost);
                 }
-            }
-        }
-
-        {
-            const left = cur.d.turnLeft();
-            const npd = PD{ .p = cur.p, .d = left };
-            const cost = cur.c + 1000;
-            if (visited.get(npd)) |old_c| {
-                if (old_c > cost) {
-                    try frontier.add(PC{ .p = cur.p, .c = cost, .d = left });
-                    try visited.put(npd, cost);
+                if (push) {
+                    try frontier.add(PC{ .p = l.p, .c = l.c, .d = l.d });
+                    try visited.put(npd, l.c);
                 }
-            } else {
-                try frontier.add(PC{ .p = cur.p, .c = cost, .d = left });
-                try visited.put(npd, cost);
-            }
-        }
-
-        {
-            const right = cur.d.turnRight();
-            const npd = PD{ .p = cur.p, .d = right };
-            const cost = cur.c + 1000;
-            if (visited.get(npd)) |old_c| {
-                if (old_c > cost) {
-                    try frontier.add(PC{ .p = cur.p, .c = cost, .d = right });
-                    try visited.put(npd, cost);
-                }
-            } else {
-                try frontier.add(PC{ .p = cur.p, .c = cost, .d = right });
-                try visited.put(npd, cost);
             }
         }
     }
@@ -185,9 +156,6 @@ fn ucs2(map: *Map, start: Point, end: Point, best: usize) !usize {
     try frontier.add(PC2{ .p = start, .c = 0, .d = Dir.E, .ps = ps });
 
     while (frontier.removeOrNull()) |*cur| {
-        const pd = PD{ .p = cur.p, .d = cur.d };
-        try visited.put(pd, cur.c);
-
         // why?
         defer @constCast(cur).ps.deinit();
 
@@ -197,65 +165,28 @@ fn ucs2(map: *Map, start: Point, end: Point, best: usize) !usize {
             continue;
         }
 
-        {
-            const v = cur.d.asVec();
-            const np = add(cur.p, v);
-            if (!map.contains(np)) {
-                const npd = PD{ .p = np, .d = cur.d };
-                const cost = cur.c + 1;
-                if (cost > best) continue;
+        const list: [3]PC = .{
+            PC{ .p = add(cur.p, cur.d.asVec()), .d = cur.d, .c = cur.c + 1 },
+            PC{ .p = cur.p, .d = cur.d.turnLeft(), .c = cur.c + 1000 },
+            PC{ .p = cur.p, .d = cur.d.turnRight(), .c = cur.c + 1000 },
+        };
+
+        for (list) |l| {
+            if (!map.contains(l.p)) {
+                const npd = PD{ .p = l.p, .d = l.d };
+                if (l.c > best) continue;
+                var push = true;
                 if (visited.get(npd)) |old_c| {
-                    if (old_c >= cost) {
-                        var psc = try cur.ps.clone();
-                        try psc.put(np, {});
-                        try frontier.add(PC2{ .p = np, .c = cost, .d = cur.d, .ps = psc });
-                        try visited.put(npd, cost);
+                    if (old_c < l.c) {
+                        push = false;
                     }
-                } else {
-                    var psc = try cur.ps.clone();
-                    try psc.put(np, {});
-                    try frontier.add(PC2{ .p = np, .c = cost, .d = cur.d, .ps = psc });
-                    try visited.put(npd, cost);
                 }
-            }
-        }
-
-        {
-            const left = cur.d.turnLeft();
-            const npd = PD{ .p = cur.p, .d = left };
-            const cost = cur.c + 1000;
-            if (cost > best) continue;
-            if (visited.get(npd)) |old_c| {
-                if (old_c >= cost) {
+                if (push) {
                     var psc = try cur.ps.clone();
-                    try psc.put(cur.p, {});
-                    try frontier.add(PC2{ .p = cur.p, .c = cost, .d = left, .ps = psc });
-                    try visited.put(npd, cost);
+                    try psc.put(l.p, {});
+                    try frontier.add(PC2{ .p = l.p, .c = l.c, .d = l.d, .ps = psc });
+                    try visited.put(npd, l.c);
                 }
-            } else {
-                var psc = try cur.ps.clone();
-                try psc.put(cur.p, {});
-                try frontier.add(PC2{ .p = cur.p, .c = cost, .d = left, .ps = psc });
-                try visited.put(npd, cost);
-            }
-        }
-
-        {
-            const right = cur.d.turnRight();
-            const npd = PD{ .p = cur.p, .d = right };
-            const cost = cur.c + 1000;
-            if (visited.get(npd)) |old_c| {
-                if (old_c >= cost) {
-                    var psc = try cur.ps.clone();
-                    try psc.put(cur.p, {});
-                    try frontier.add(PC2{ .p = cur.p, .c = cost, .d = right, .ps = psc });
-                    try visited.put(npd, cost);
-                }
-            } else {
-                var psc = try cur.ps.clone();
-                try psc.put(cur.p, {});
-                try frontier.add(PC2{ .p = cur.p, .c = cost, .d = right, .ps = psc });
-                try visited.put(npd, cost);
             }
         }
     }
@@ -287,7 +218,7 @@ fn p2(text: Str) !usize {
 
 pub fn main() anyerror!void {
     defer _ = gpa_impl.deinit();
-    const text = @embedFile("test");
+    const text = @embedFile("input");
     const trimmed = std.mem.trim(u8, text, "\n");
     print("Part 1: {}\n", .{try p1(trimmed)});
     print("Part 2: {}\n", .{try p2(trimmed)});
