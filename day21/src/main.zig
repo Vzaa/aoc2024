@@ -172,25 +172,11 @@ pub fn takeLeft(comptime T: type, slice: []const T, values_to_take: []const T) [
     return slice[0..end];
 }
 
-const StartEnd = struct {
-    s: Point,
-    e: u8,
-};
-
-const PathPoint = struct {
-    path: Path,
-    end: Point,
-};
-
-const Memo = AutoHashMap(StartEnd, PathPoint);
-
 fn p1(text: Str) !usize {
     var numpad = try parseMap(numpad_str);
     defer numpad.deinit();
     var dirpad = try parseMap(dirpad_str);
     defer dirpad.deinit();
-
-    var memo = Memo.init(gpa);
 
     var line_iter = mem.split(u8, text, "\n");
 
@@ -222,15 +208,9 @@ fn p1(text: Str) !usize {
             pad.clearRetainingCapacity();
             p = Point{ 2, 0 };
             for (tgt) |c| {
-                const se = StartEnd{ .s = p, .e = c };
-                if (memo.get(se)) |best| {
-                    try pad.appendSlice(best.path.items);
-                    p = best.end;
-                } else {
-                    const to_btn = try shortestPath(&dirpad, &p, c);
-                    try pad.appendSlice(to_btn.items);
-                    try memo.put(se, PathPoint{ .path = to_btn, .end = p });
-                }
+                const to_btn = try shortestPath(&dirpad, &p, c);
+                defer to_btn.deinit();
+                try pad.appendSlice(to_btn.items);
             }
             tgt = pad.items;
         }
@@ -243,9 +223,9 @@ fn p1(text: Str) !usize {
     return sum;
 }
 
-const Memo2 = StringHashMap(usize);
+const Memo = StringHashMap(usize);
 
-fn rec(text: Str, depth: usize, dirpad: *Map, dmemos: []Memo2) !usize {
+fn rec(text: Str, depth: usize, dirpad: *Map, dmemos: []Memo) !usize {
     var p = Point{ 2, 0 };
     var cnt: usize = 0;
 
@@ -253,11 +233,12 @@ fn rec(text: Str, depth: usize, dirpad: *Map, dmemos: []Memo2) !usize {
 
     for (text) |c| {
         const to_btn = try shortestPath(dirpad, &p, c);
+        defer to_btn.deinit();
         if (dmemos[depth].get(to_btn.items)) |m| {
             cnt += m;
         } else {
             const m = try rec(to_btn.items, depth - 1, dirpad, dmemos);
-            try dmemos[depth].put(to_btn.items, m);
+            try dmemos[depth].put(try gpa.dupe(u8, to_btn.items), m);
             cnt += m;
         }
     }
@@ -291,12 +272,20 @@ fn p2(text: Str) !usize {
 
         const tgt = numpad_path.items;
 
-        var dmemos = ArrayList(Memo2).init(gpa);
+        var dmemos = ArrayList(Memo).init(gpa);
         defer dmemos.deinit();
         for (0..26) |_| {
-            try dmemos.append(Memo2.init(gpa));
+            try dmemos.append(Memo.init(gpa));
         }
-        defer for (dmemos.items) |*d| d.deinit();
+        defer {
+            for (dmemos.items) |*d| {
+                var it = d.iterator();
+                while (it.next()) |entry| {
+                    gpa.free(entry.key_ptr.*);
+                }
+                d.deinit();
+            }
+        }
 
         const presses = try rec(tgt, 25, &dirpad, dmemos.items);
 
@@ -308,7 +297,7 @@ fn p2(text: Str) !usize {
 }
 
 pub fn main() anyerror!void {
-    // defer _ = gpa_impl.deinit();
+    defer _ = gpa_impl.deinit();
     const text = if (tst) @embedFile("test") else @embedFile("input");
     const trimmed = std.mem.trim(u8, text, "\n");
     print("Part 1: {}\n", .{try p1(trimmed)});
