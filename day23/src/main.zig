@@ -75,13 +75,20 @@ fn findInter(links: *LinksH) !void {
 
     var visited = StringHashMap(void).init(gpa);
     defer visited.deinit();
+    defer {
+        var it = visited.iterator();
+        while (it.next()) |e| {
+            gpa.free(e.key_ptr.*);
+        }
+    }
 
     var list = ArrayList(ArrayList(Name)).init(gpa);
+    defer list.deinit();
+    defer for (list.items) |i| i.deinit();
 
     while (frontier.popOrNull()) |cur| {
         var expandable = AutoHashMap(Name, void).init(gpa);
         defer expandable.deinit();
-
         defer cur.list.deinit();
 
         for (cur.list.items) |n| {
@@ -124,6 +131,9 @@ fn findInter(links: *LinksH) !void {
             if (!visited.contains(text)) {
                 try visited.put(text, {});
                 try frontier.append(State{ .list = new_list });
+            } else {
+                new_list.deinit();
+                gpa.free(text);
             }
         }
     }
@@ -155,6 +165,12 @@ fn p1(text: Str) !usize {
 
     var links = Links.init(gpa);
     defer links.deinit();
+    defer {
+        var it = links.iterator();
+        while (it.next()) |e| {
+            e.value_ptr.deinit();
+        }
+    }
 
     while (line_iter.next()) |line| {
         var name_iter = mem.tokenize(u8, line, "-");
@@ -199,6 +215,12 @@ fn p2(text: Str) !void {
 
     var links = LinksH.init(gpa);
     defer links.deinit();
+    defer {
+        var it = links.iterator();
+        while (it.next()) |e| {
+            e.value_ptr.deinit();
+        }
+    }
 
     while (line_iter.next()) |line| {
         var name_iter = mem.tokenize(u8, line, "-");
@@ -216,7 +238,7 @@ fn p2(text: Str) !void {
 }
 
 pub fn main() anyerror!void {
-    // defer _ = gpa_impl.deinit();
+    defer _ = gpa_impl.deinit();
     const text = if (tst) @embedFile("test") else @embedFile("input");
     const trimmed = std.mem.trim(u8, text, "\n");
     print("Part 1: {}\n", .{try p1(trimmed)});
